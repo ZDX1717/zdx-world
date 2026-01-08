@@ -12,7 +12,7 @@ PORT=3000  # 映射端口
 echo "===== 开始部署 ZDX的小世界 ====="
 
 # 1. 创建项目目录
-echo "1. 创建项目目录..."
+echo "1. 创建项目目录...."
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 
