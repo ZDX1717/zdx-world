@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZDX的小世界</title>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* 1. 系统背景层：最底层，全屏深色，无内边距 */
+    body {
+      background-color: #0a0a0a;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* 2. 终端背景层：核心容器，自适应屏幕，带间距和阴影 */
+    .terminal {
+      width: 100%;
+      max-width: 700px;
+      min-width: 300px;
+      background-color: #000;
+      border-radius: 24px;
+      padding: 30px 20px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 50px rgba(0, 255, 0, 0.2);
+      margin: 20px; /* 屏幕边缘间距，避免贴边 */
+      flex-shrink: 0;
+    }
+
+    /* 像素网格背景：跟随终端容器，不超出 */
+    .terminal::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: linear-gradient(rgba(60, 255, 60, 0.1) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(60, 255, 60, 0.1) 1px, transparent 1px);
+      background-size: 15px 15px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* 顶部栏 */
+    .terminal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .terminal-header .date {
+      display: flex;
+      gap: 15px;
+    }
+
+    .terminal-header span {
+      color: #3cff3c;
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    .terminal-header .actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .terminal-header .actions button {
+      background: transparent;
+      border: 1px solid #3cff3c;
+      color: #3cff3c;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .terminal-header .actions button:hover {
+      background: rgba(60, 255, 60, 0.2);
+    }
+
+    /* 主标题 */
+    .terminal-title {
+      color: #3cff3c;
+      font-size: 24px;
+      line-height: 1.4;
+      margin-bottom: 40px;
+      position: relative;
+      z-index: 2;
+      letter-spacing: 2px;
+      text-align: center;
+      font-weight: bold;
+      height: 34px;
+      overflow: hidden;
+    }
+
+    /* 开始按钮 */
+    .terminal-start {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 30px;
+      padding: 0 5px;
+    }
+
+    .terminal-start:hover {
+      transform: scale(1.03);
+    }
+
+    .terminal-start span {
+      color: #3cff3c;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .terminal-start .arrow {
+      color: #3cff3c;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    /* 卡片容器 */
+    .card-container {
+      margin-top: 20px;
+      display: none;
+      position: relative;
+      z-index: 2;
+      max-height: 60vh;
+      overflow-y: auto;
+      padding-right: 5px;
+    }
+
+    /* 滚动条 */
+    .card-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .card-container::-webkit-scrollbar-thumb {
+      background: #3cff3c;
+      border-radius: 3px;
+    }
+
+    .card-container::-webkit-scrollbar-track {
+      background: #000;
+    }
+
+    /* 3. 卡片背景层：与终端背景强对比，独立区块 */
+    .card {
+      background-color: rgba(0, 80, 0, 0.6);
+      border: 1px solid #3cff3c;
+      border-left: 4px solid #3cff3c;
+      border-radius: 8px;
+      padding: 18px 15px;
+      margin-bottom: 12px;
+      color: #3cff3c;
+      font-size: 18px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .card:hover {
+      background-color: rgba(0, 120, 0, 0.7);
+      transform: translateX(3px);
+    }
+
+    .card .content {
+      flex: 1;
+    }
+
+    .card .actions {
+      display: flex;
+      gap: 8px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    body.edit-mode .card .actions {
+      opacity: 1;
+    }
+
+    .card .actions button {
+      background: transparent;
+      border: none;
+      color: #3cff3c;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card .actions .delete {
+      color: #ff4444;
+    }
+
+    .card .actions button:hover {
+      transform: scale(1.2);
+    }
+
+    /* 隐藏URL */
+    .card a {
+      display: none;
+    }
+
+    /* 模态框 */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 99;
+      padding: 15px;
+    }
+
+    .modal-content {
+      background: #000;
+      border: 2px solid #3cff3c;
+      border-radius: 12px;
+      padding: 25px 20px;
+      width: 100%;
+      max-width: 350px;
+      color: #3cff3c;
+    }
+
+    .modal-content h2 {
+      font-size: 20px;
+      margin-bottom: 18px;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .modal-content input {
+      width: 100%;
+      background: rgba(0, 40, 0, 0.5);
+      border: 1px solid #3cff3c;
+      border-radius: 4px;
+      padding: 10px;
+      margin-bottom: 12px;
+      color: #3cff3c;
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: bold;
+    }
+
+    .modal-content input::placeholder {
+      color: #88ff88;
+      opacity: 0.7;
+      font-weight: normal;
+    }
+
+    .modal-content .btns {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+
+    .modal-content button {
+      background: transparent;
+      border: 1px solid #3cff3c;
+      color: #3cff3c;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: bold;
+    }
+
+    .modal-content button:hover {
+      background: rgba(60, 255, 60, 0.2);
+    }
+
+    .modal-content .confirm {
+      background: rgba(60, 255, 60, 0.2);
+    }
+
+    /* 编辑模式标识 */
+    .edit-tag {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      color: #3cff3c;
+      font-size: 12px;
+      border: 1px solid #3cff3c;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: none;
+      z-index: 99;
+      background: #000;
+      font-weight: bold;
+    }
+
+    body.edit-mode .edit-tag {
+      display: block;
+    }
+
+    /* 大屏适配 */
+    @media (min-width: 768px) {
+      .terminal {
+        padding: 40px 30px;
+      }
+      .terminal-title {
+        font-size: 28px;
+        height: 40px;
+      }
+      .card {
+        font-size: 20px;
+        padding: 20px 18px;
+      }
+    }
+
+    /* 小屏手机适配 */
+    @media (max-width: 375px) {
+      .terminal-title {
+        font-size: 20px;
+        height: 28px;
+      }
+      .terminal-start span {
+        font-size: 24px;
+      }
+      .terminal-header .actions button {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+      }
+      .card {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 编辑模式标识 -->
+  <div class="edit-tag">编辑模式</div>
+
+  <!-- 终端主容器（页面背景层） -->
+  <div class="terminal">
+    <!-- 顶部栏 -->
+    <div class="terminal-header">
+      <div class="date">
+        <span>2026</span>
+        <span>01</span>
+      </div>
+      <div class="actions">
+        <button id="syncBtn" title="同步到GitHub">💻</button>
+        <button id="editModeBtn" title="编辑模式">✏️</button>
+        <button id="addCardBtn" title="添加卡片">+</button>
+      </div>
+    </div>
+
+    <!-- 主标题 -->
+    <div class="terminal-title" id="titleTyping">ZDX的小世界</div>
+
+    <!-- 开始按钮 -->
+    <div class="terminal-start" id="startBtn">
+      <span>开始</span>
+      <span class="arrow">→</span>
+    </div>
+
+    <!-- 卡片容器 -->
+    <div class="card-container" id="cardContainer"></div>
+  </div>
+
+  <!-- 密码验证模态框 -->
+  <div class="modal" id="passwordModal">
+    <div class="modal-content">
+      <h2>验证管理员</h2>
+      <input type="password" id="passwordInput" placeholder="输入管理密码">
+      <div class="btns">
+        <button id="cancelPasswordBtn">取消</button>
+        <button id="confirmPasswordBtn" class="confirm">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片编辑模态框 -->
+  <div class="modal" id="cardModal">
+    <div class="modal-content">
+      <h2 id="modalTitle">添加卡片</h2>
+      <input type="hidden" id="cardId">
+      <input type="text" id="titleInput" placeholder="卡片标题">
+      <input type="text" id="urlInput" placeholder="卡片链接">
+      <input type="color" id="colorInput" value="#3cff3c">
+      <div class="btns">
+        <button id="cancelCardBtn">取消</button>
+        <button id="saveCardBtn" class="confirm">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 核心状态管理
+    let isAuthenticated = false;
+    let isEditMode = false;
+    let sortable = null;
+
+    // DOM 元素获取
+    const startBtn = document.getElementById('startBtn');
+    const cardContainer = document.getElementById('cardContainer');
+    const syncBtn = document.getElementById('syncBtn');
+    const editModeBtn = document.getElementById('editModeBtn');
+    const addCardBtn = document.getElementById('addCardBtn');
+    const passwordModal = document.getElementById('passwordModal');
+    const cardModal = document.getElementById('cardModal');
+    const passwordInput = document.getElementById('passwordInput');
+    const confirmPasswordBtn = document.getElementById('confirmPasswordBtn');
+    const cancelPasswordBtn = document.getElementById('cancelPasswordBtn');
+    const cancelCardBtn = document.getElementById('cancelCardBtn');
+    const saveCardBtn = document.getElementById('saveCardBtn');
+    const titleInput = document.getElementById('titleInput');
+    const urlInput = document.getElementById('urlInput');
+    const colorInput = document.getElementById('colorInput');
+    const cardId = document.getElementById('cardId');
+    const modalTitle = document.getElementById('modalTitle');
+    const titleTyping = document.getElementById('titleTyping');
+
+    // 标题打字机动画
+    function titleTypewriter() {
+      const titleText = 'ZDX的小世界';
+      titleTyping.textContent = '';
+      let index = 0;
+      const typingInterval = setInterval(() => {
+        titleTyping.textContent += titleText[index];
+        index++;
+        if (index >= titleText.length) {
+          clearInterval(typingInterval);
+        }
+      }, 200);
+    }
+
+    // 页面加载时执行标题打字机
+    window.onload = titleTypewriter;
+
+    // 卡片打字机动画
+    function cardTypewriter(cardEl, text) {
+      cardEl.textContent = '';
+      let index = 0;
+      const typingInterval = setInterval(() => {
+        cardEl.textContent += text[index];
+        index++;
+        if (index >= text.length) {
+          clearInterval(typingInterval);
+        }
+      }, 50);
+    }
+
+    // 启动按钮点击：加载卡片
+    startBtn.addEventListener('click', () => {
+      cardContainer.style.display = 'block';
+      loadCards();
+      startBtn.style.display = 'none';
+    });
+
+    // 密码验证逻辑
+    function showPasswordModal(onSuccess) {
+      passwordModal.style.display = 'flex';
+      passwordInput.value = '';
+
+      confirmPasswordBtn.onclick = async () => {
+        const password = passwordInput.value;
+        const res = await fetch('/api/verify-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          isAuthenticated = true;
+          passwordModal.style.display = 'none';
+          onSuccess();
+        } else {
+          alert('密码错误！');
+        }
+      };
+
+      cancelPasswordBtn.onclick = () => {
+        passwordModal.style.display = 'none';
+      };
+    }
+
+    // 编辑模式切换
+    editModeBtn.addEventListener('click', () => {
+      if (!isAuthenticated) {
+        showPasswordModal(toggleEditMode);
+      } else {
+        toggleEditMode();
+      }
+    });
+
+    function toggleEditMode() {
+      isEditMode = !isEditMode;
+      document.body.classList.toggle('edit-mode', isEditMode);
+      
+      if (isEditMode) {
+        enableSorting();
+        editModeBtn.textContent = '✓';
+      } else {
+        disableSorting();
+        saveCurrentOrder();
+        editModeBtn.textContent = '✏️';
+        isAuthenticated = false;
+      }
+    }
+
+    // 拖拽排序
+    function enableSorting() {
+      sortable = new Sortable(cardContainer, {
+        animation: 150,
+        handle: '.card',
+        ghostClass: 'bg-green-900/50',
+      });
+    }
+
+    function disableSorting() {
+      if (sortable) sortable.destroy();
+    }
+
+    // 添加卡片
+    addCardBtn.addEventListener('click', () => {
+      if (!isAuthenticated) {
+        showPasswordModal(() => openCardModal());
+      } else {
+        openCardModal();
+      }
+    });
+
+    // 同步到GitHub
+    syncBtn.addEventListener('click', async () => {
+      if (!isAuthenticated) {
+        showPasswordModal(syncToGitHub);
+      } else {
+        syncToGitHub();
+      }
+    });
+
+    async function syncToGitHub() {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      const data = await res.json();
+      alert(data.message);
+    }
+
+    // 卡片CRUD操作
+    async function loadCards() {
+      const res = await fetch('/api/cards');
+      const cards = await res.json();
+      renderCards(cards);
+    }
+
+    function renderCards(cards) {
+      cardContainer.innerHTML = '';
+      cards.forEach((card, index) => {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.style.borderLeftColor = card.color || '#3cff3c';
+        el.innerHTML = `
+          <div class="content">
+            <div class="title">${card.title}</div>
+            <a href="${card.url}" target="_blank">${card.url}</a>
+          </div>
+          <div class="actions">
+            <button class="edit" data-id="${card.id}">✏️</button>
+            <button class="delete" data-id="${card.id}">🗑️</button>
+          </div>
+        `;
+        cardContainer.appendChild(el);
+
+        // 卡片逐个打字机动画
+        setTimeout(() => {
+          const titleEl = el.querySelector('.title');
+          const originalText = titleEl.textContent;
+          cardTypewriter(titleEl, originalText);
+        }, index * 300);
+
+        // 编辑卡片
+        el.querySelector('.edit').addEventListener('click', () => {
+          if (!isAuthenticated) {
+            showPasswordModal(() => openCardModal(card));
+          } else {
+            openCardModal(card);
+          }
+        });
+
+        // 删除卡片
+        el.querySelector('.delete').addEventListener('click', async () => {
+          if (!isAuthenticated) {
+            showPasswordModal(async () => {
+              await deleteCard(card.id);
+            });
+          } else {
+            await deleteCard(card.id);
+          }
+        });
+
+        // 点击卡片打开链接
+        el.addEventListener('click', (e) => {
+          if (!e.target.closest('.actions')) {
+            window.open(card.url, '_blank');
+          }
+        });
+      });
+    }
+
+    function openCardModal(card = { id: null, title: '', url: '', color: '#3cff3c' }) {
+      cardId.value = card.id;
+      titleInput.value = card.title;
+      urlInput.value = card.url;
+      colorInput.value = card.color;
+      modalTitle.textContent = card.id ? '编辑卡片' : '添加卡片';
+      cardModal.style.display = 'flex';
+    }
+
+    cancelCardBtn.addEventListener('click', () => {
+      cardModal.style.display = 'none';
+    });
+
+    saveCardBtn.addEventListener('click', async () => {
+      const id = cardId.value;
+      const title = titleInput.value;
+      const url = urlInput.value;
+      const color = colorInput.value;
+
+      if (!title || !url) {
+        alert('标题和链接不能为空！');
+        return;
+      }
+
+      const res = await fetch('/api/cards');
+      let cards = await res.json();
+
+      if (id) {
+        cards = cards.map(c => c.id == id ? { ...c, title, url, color } : c);
+      } else {
+        const newId = cards.length ? Math.max(...cards.map(c => c.id)) + 1 : 1;
+        cards.push({ id: newId, title, url, color });
+      }
+
+      await saveCards(cards);
+      loadCards();
+      cardModal.style.display = 'none';
+    });
+
+    async function deleteCard(id) {
+      const res = await fetch('/api/cards');
+      let cards = await res.json();
+      cards = cards.filter(c => c.id !== id);
+      await saveCards(cards);
+      loadCards();
+    }
+
+    async function saveCards(cards) {
+      await fetch('/api/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cards)
+      });
+    }
+
+    // 保存卡片排序
+    async function saveCurrentOrder() {
+      const cards = [];
+      document.querySelectorAll('.card').forEach((el, index) => {
+        const title = el.querySelector('.title').textContent;
+        const url = el.querySelector('a').href;
+        const color = el.style.borderLeftColor;
+        cards.push({ id: index + 1, title, url, color });
+      });
+      await saveCards(cards);
+    }
+  </script>
+</body>
+</html>

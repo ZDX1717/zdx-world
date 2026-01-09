@@ -1,1 +1,32 @@
-404: Not Found
+[
+  {
+    "id": 1,
+    "title": "Firefox",
+    "url": "http://154.12.28.47:3002/",
+    "color": "rgb(255, 0, 0)"
+  },
+  {
+    "id": 2,
+    "title": "MCSManager",
+    "url": "http://101.43.122.225:23333/",
+    "color": "rgb(0, 255, 0)"
+  },
+  {
+    "id": 3,
+    "title": "Dpanel-hk",
+    "url": "https://dpanel.139054.xyz/",
+    "color": "rgb(0, 0, 255)"
+  },
+  {
+    "id": 4,
+    "title": "Dpanel-tx",
+    "url": "http://101.43.122.225:3000/",
+    "color": "rgb(0, 255, 255)"
+  },
+  {
+    "id": 5,
+    "title": "OpenList",
+    "url": "http://154.12.28.47:3003",
+    "color": "#ffffff"
+  }
+]

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日志可视化 | ZDX的小世界</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    /* 系统背景层：复用主页面深色背景 */
+    body {
+      background-color: #0a0a0a;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px 0;
+      overflow-x: hidden;
+    }
+    /* 终端背景层：完全复用主页面终端容器样式 */
+    .terminal {
+      width: 100%;
+      max-width: 1000px;
+      min-width: 300px;
+      background-color: #000;
+      border-radius: 24px;
+      padding: 30px 20px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 50px rgba(0, 255, 0, 0.2);
+      margin: 20px;
+      flex-shrink: 0;
+    }
+    /* 像素网格背景：复用主页面网格效果 */
+    .terminal::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: linear-gradient(rgba(60, 255, 60, 0.1) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(60, 255, 60, 0.1) 1px, transparent 1px);
+      background-size: 15px 15px;
+      z-index: 1;
+      pointer-events: none;
+    }
+    /* 顶部栏：复用主页面顶部布局 */
+    .terminal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      position: relative;
+      z-index: 2;
+    }
+    .terminal-header .date {
+      display: flex;
+      gap: 15px;
+    }
+    .terminal-header span {
+      color: #3cff3c;
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .terminal-header .actions {
+      display: flex;
+      gap: 10px;
+    }
+    .terminal-header .actions button {
+      background: transparent;
+      border: 1px solid #3cff3c;
+      color: #3cff3c;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .terminal-header .actions button:hover {
+      background: rgba(60, 255, 60, 0.2);
+    }
+    /* 主标题：复用主页面标题样式 */
+    .terminal-title {
+      color: #3cff3c;
+      font-size: 24px;
+      line-height: 1.4;
+      margin-bottom: 40px;
+      position: relative;
+      z-index: 2;
+      letter-spacing: 2px;
+      text-align: center;
+      font-weight: bold;
+      height: 34px;
+      overflow: hidden;
+    }
+    /* 日志标签栏：仅保留访问日志标签 */
+    .log-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 2;
+    }
+    .log-tab {
+      flex: 1;
+      background: transparent;
+      border: 1px solid #3cff3c;
+      color: #3cff3c;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    .log-tab.active {
+      background: rgba(60, 255, 60, 0.2);
+      border-color: #66ff66;
+      box-shadow: 0 0 10px rgba(60, 255, 60, 0.3);
+    }
+    /* 日期选择区域样式 */
+    .date-selector {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 2;
+      align-items: center;
+    }
+    .date-picker {
+      flex: 1;
+      background: rgba(0, 40, 0, 0.6);
+      border: 1px solid #3cff3c;
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #3cff3c;
+      font-size: 14px;
+      outline: none;
+      font-family: inherit;
+    }
+    .log-file-list {
+      width: 200px;
+      background: rgba(0, 40, 0, 0.6);
+      border: 1px solid #3cff3c;
+      border-radius: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+      color: #3cff3c;
+      font-size: 14px;
+    }
+    .log-file-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(60, 255, 60, 0.1);
+      transition: all 0.2s ease;
+    }
+    .log-file-item:hover {
+      background: rgba(60, 255, 60, 0.2);
+    }
+    .log-file-item.active {
+      background: rgba(60, 255, 60, 0.3);
+      font-weight: bold;
+    }
+    /* 统计面板样式 */
+    .stats-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 2;
+    }
+    .stats-card {
+      background-color: rgba(0, 40, 0, 0.4);
+      border: 1px solid #3cff3c;
+      border-radius: 8px;
+      padding: 15px;
+      color: #3cff3c;
+    }
+    .stats-card h3 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: #66ff66;
+      border-bottom: 1px solid rgba(60, 255, 60, 0.3);
+      padding-bottom: 5px;
+    }
+    .stats-card .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+    .stats-card .ip-list {
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 14px;
+    }
+    .stats-card .ip-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(60, 255, 60, 0.1);
+    }
+    .stats-card .ip-item .count {
+      color: #88ff88;
+    }
+    /* IP筛选样式 */
+    .ip-filter {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      position: relative;
+      z-index: 2;
+    }
+    .ip-filter input {
+      flex: 1;
+      background: rgba(0, 40, 0, 0.6);
+      border: 1px solid #3cff3c;
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #3cff3c;
+      font-size: 14px;
+      outline: none;
+    }
+    .ip-filter button {
+      background: transparent;
+      border: 1px solid #3cff3c;
+      color: #3cff3c;
+      padding: 8px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .ip-filter button:hover {
+      background: rgba(60, 255, 60, 0.2);
+    }
+    /* 日志内容区 */
+    .log-content {
+      background-color: rgba(0, 40, 0, 0.4);
+      border: 1px solid #3cff3c;
+      border-radius: 8px;
+      padding: 18px;
+      position: relative;
+      z-index: 2;
+      height: 40vh;
+      overflow-y: auto;
+      color: #3cff3c;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+    /* 滚动条样式 */
+    .log-content::-webkit-scrollbar,
+    .stats-card .ip-list::-webkit-scrollbar,
+    .log-file-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .log-content::-webkit-scrollbar-thumb,
+    .stats-card .ip-list::-webkit-scrollbar-thumb,
+    .log-file-list::-webkit-scrollbar-thumb {
+      background: #3cff3c;
+      border-radius: 3px;
+    }
+    .log-content::-webkit-scrollbar-track,
+    .stats-card .ip-list::-webkit-scrollbar-track,
+    .log-file-list::-webkit-scrollbar-track {
+      background: #000;
+    }
+    /* 加载状态 */
+    .loading {
+      color: #88ff88;
+      font-style: italic;
+      text-align: center;
+      padding: 20px;
+    }
+    /* 选中IP日志高亮 */
+    .log-content .highlight-ip {
+      background: rgba(60, 255, 60, 0.2);
+      color: #ffff00;
+    }
+    /* 响应式适配 */
+    @media (min-width: 768px) {
+      .terminal {
+        padding: 40px 30px;
+      }
+      .terminal-title {
+        font-size: 28px;
+        height: 40px;
+      }
+      .log-tab {
+        font-size: 18px;
+        padding: 12px;
+      }
+      .log-content {
+        font-size: 16px;
+        padding: 20px;
+      }
+      .stats-card h3 {
+        font-size: 18px;
+      }
+      .stats-card .stat-value {
+        font-size: 28px;
+      }
+    }
+    @media (max-width: 768px) {
+      .date-selector {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .log-file-list {
+        width: 100%;
+      }
+    }
+    @media (max-width: 375px) {
+      .terminal-title {
+        font-size: 20px;
+        height: 28px;
+      }
+      .terminal-header .actions button {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+      }
+      .log-tab {
+        font-size: 14px;
+        padding: 8px;
+      }
+      .log-content {
+        font-size: 13px;
+      }
+      .stats-panel {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="terminal">
+    <!-- 顶部栏 -->
+    <div class="terminal-header">
+      <div class="date">
+        <span id="currentYear">2026</span>
+        <span id="currentMonth">01</span>
+      </div>
+      <div class="actions">
+        <button id="backBtn" title="返回主页面">←</button>
+        <button id="refreshBtn" title="刷新日志">🔄</button>
+      </div>
+    </div>
+    <!-- 主标题 -->
+    <div class="terminal-title" id="titleTyping">访问日志可视化</div>
+    <!-- 日志标签栏（仅保留访问日志） -->
+    <div class="log-tabs">
+      <div class="log-tab active" data-type="access">访问日志</div>
+    </div>
+    <!-- 新增日期选择区域 -->
+    <div class="date-selector" id="dateSelector">
+      <input type="date" class="date-picker" id="datePicker">
+      <div class="log-file-list" id="logFileList">
+        <div class="loading">加载日志列表...</div>
+      </div>
+    </div>
+    <!-- 统计面板 -->
+    <div class="stats-panel" id="statsPanel">
+      <div class="stats-card">
+        <h3>总访问次数</h3>
+        <div class="stat-value" id="totalVisits">0</div>
+      </div>
+      <div class="stats-card">
+        <h3>独立IP数</h3>
+        <div class="stat-value" id="uniqueIps">0</div>
+      </div>
+      <div class="stats-card">
+        <h3>访问TOP IP</h3>
+        <div class="ip-list" id="topIpList">
+          <div class="loading">加载中...</div>
+        </div>
+      </div>
+    </div>
+    <!-- IP筛选框 -->
+    <div class="ip-filter" id="ipFilter">
+      <input type="text" id="ipSearchInput" placeholder="输入IP筛选日志...">
+      <button id="clearFilterBtn">清空筛选</button>
+    </div>
+    <!-- 日志内容区 -->
+    <div class="log-content" id="logContent"></div>
+  </div>
+  <script>
+    // DOM 元素获取（包含新增日期选择相关元素）
+    const dom = {
+      titleTyping: document.getElementById('titleTyping'),
+      logContent: document.getElementById('logContent'),
+      backBtn: document.getElementById('backBtn'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      currentYear: document.getElementById('currentYear'),
+      currentMonth: document.getElementById('currentMonth'),
+      totalVisits: document.getElementById('totalVisits'),
+      uniqueIps: document.getElementById('uniqueIps'),
+      topIpList: document.getElementById('topIpList'),
+      ipSearchInput: document.getElementById('ipSearchInput'),
+      clearFilterBtn: document.getElementById('clearFilterBtn'),
+      datePicker: document.getElementById('datePicker'),
+      logFileList: document.getElementById('logFileList'),
+      dateSelector: document.getElementById('dateSelector')
+    };
+
+    // 全局状态（新增日志文件相关状态）
+    let rawLogData = '';
+    let ipStats = {
+      total: 0,
+      unique: 0,
+      ipCounts: {}
+    };
+    let currentFilterIp = '';
+    let logFiles = []; // 所有日志文件列表
+    let currentFilename = ''; // 当前选中的日志文件名
+
+    // 初始化页面
+    function initPageInfo() {
+      const now = new Date();
+      currentYear.textContent = now.getFullYear();
+      currentMonth.textContent = String(now.getMonth() + 1).padStart(2, '0');
+      // 设置日期选择器默认值为今天（格式：YYYY-MM-DD）
+      const today = now.toISOString().split('T')[0];
+      dom.datePicker.value = today;
+      // 初始化标题动画、加载日志文件列表、加载今日日志
+      titleTypewriter();
+      loadLogFiles();
+      initDatePickerListener();
+    }
+
+    // 标题打字机动画
+    function titleTypewriter() {
+      const titleText = '访问日志可视化';
+      titleTyping.textContent = '';
+      let index = 0;
+      const typingInterval = setInterval(() => {
+        titleTyping.textContent += titleText[index];
+        index++;
+        if (index >= titleText.length) {
+          clearInterval(typingInterval);
+        }
+      }, 200);
+    }
+
+    // 加载所有日志文件列表
+    async function loadLogFiles() {
+      dom.logFileList.innerHTML = '<div class="loading">加载日志列表...</div>';
+      try {
+        const res = await fetch('/api/logs/files');
+        const data = await res.json();
+        if (data.success) {
+          logFiles = data.files;
+          renderLogFileList();
+          // 默认选中第一个文件（最新日期）
+          if (logFiles.length > 0) {
+            selectLogFile(logFiles[0]);
+          }
+        } else {
+          dom.logFileList.innerHTML = '<div class="loading">加载失败</div>';
+        }
+      } catch (err) {
+        dom.logFileList.innerHTML = '<div class="loading">加载失败</div>';
+      }
+    }
+
+    // 渲染日志文件列表（显示为中文日期格式）
+    function renderLogFileList() {
+      if (logFiles.length === 0) {
+        dom.logFileList.innerHTML = '<div class="loading">暂无日志文件</div>';
+        return;
+      }
+      dom.logFileList.innerHTML = '';
+      logFiles.forEach(file => {
+        // 解析文件名中的日期（格式：access-2024-05-20.log → 2024-05-20）
+        const dateStr = file.replace('access-', '').replace('.log', '');
+        // 格式化为中文日期显示（2024-05-20 → 2024年5月20日）
+        const [year, month, day] = dateStr.split('-');
+        const displayDate = `${year}年${parseInt(month)}月${parseInt(day)}日`;
+        const el = document.createElement('div');
+        el.className = `log-file-item ${currentFilename === file ? 'active' : ''}`;
+        el.textContent = displayDate;
+        el.dataset.filename = file;
+        el.addEventListener('click', () => selectLogFile(file));
+        dom.logFileList.appendChild(el);
+      });
+    }
+
+    // 选中日志文件并加载日志
+    async function selectLogFile(filename) {
+      currentFilename = filename;
+      // 更新文件列表选中状态
+      document.querySelectorAll('.log-file-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.filename === filename);
+      });
+      // 加载选中文件的日志
+      await loadLogsByFilename(filename);
+    }
+
+    // 按文件名加载日志
+    async function loadLogsByFilename(filename) {
+      dom.logContent.innerHTML = '<div class="loading">加载中...</div>';
+      try {
+        const res = await fetch(`/api/logs/${filename}`);
+        if (!res.ok) throw new Error('日志加载失败');
+        const text = await res.text();
+        rawLogData = text;
+        // 解析统计数据并更新面板
+        parseAccessLogStats(text);
+        // 应用IP筛选
+        if (currentFilterIp) {
+          filterLogsByIp();
+        } else {
+          dom.logContent.textContent = text;
+        }
+        dom.logContent.scrollTop = dom.logContent.scrollHeight;
+      } catch (err) {
+        dom.logContent.innerHTML = `<div class="loading">${err.message}</div>`;
+        topIpList.innerHTML = `<div class="loading">${err.message}</div>`;
+      }
+    }
+
+    // 日期选择器事件监听
+    function initDatePickerListener() {
+      dom.datePicker.addEventListener('change', (e) => {
+        const selectedDate = e.target.value; // 格式：YYYY-MM-DD
+        if (!selectedDate) return;
+        // 转换为日志文件名格式：access-YYYY-MM-DD.log
+        const targetFilename = `access-${selectedDate}.log`;
+        // 检查是否存在该日期的日志文件
+        const exists = logFiles.includes(targetFilename);
+        if (exists) {
+          selectLogFile(targetFilename);
+        } else {
+          dom.logContent.innerHTML = '<div class="loading">该日期无日志记录</div>';
+          // 清空统计面板
+          totalVisits.textContent = 0;
+          uniqueIps.textContent = 0;
+          topIpList.innerHTML = '<div class="loading">无数据</div>';
+        }
+      });
+    }
+
+    // 解析访问日志统计数据
+    function parseAccessLogStats(logText) {
+      const lines = logText.split('\n').filter(line => line.trim());
+      const ipCounts = {};
+      const ipRegex = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
+      
+      lines.forEach(line => {
+        const matches = line.match(ipRegex);
+        if (matches && matches.length > 0) {
+          const ip = matches[0];
+          ipCounts[ip] = (ipCounts[ip] || 0) + 1;
+        }
+      });
+      
+      ipStats = {
+        total: lines.length,
+        unique: Object.keys(ipCounts).length,
+        ipCounts: ipCounts
+      };
+      
+      updateStatsPanel();
+    }
+
+    // 更新统计面板
+    function updateStatsPanel() {
+      totalVisits.textContent = ipStats.total;
+      uniqueIps.textContent = ipStats.unique;
+      
+      const sortedIps = Object.entries(ipStats.ipCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8);
+      
+      if (sortedIps.length === 0) {
+        topIpList.innerHTML = '<div class="loading">暂无IP数据</div>';
+        return;
+      }
+      
+      topIpList.innerHTML = '';
+      sortedIps.forEach(([ip, count], index) => {
+        const ipItem = document.createElement('div');
+        ipItem.className = 'ip-item';
+        ipItem.innerHTML = `
+          <span>${index + 1}. ${ip}</span>
+          <span class="count">${count}次</span>
+        `;
+        ipItem.addEventListener('click', () => {
+          currentFilterIp = ip;
+          ipSearchInput.value = ip;
+          filterLogsByIp();
+        });
+        topIpList.appendChild(ipItem);
+      });
+    }
+
+    // IP筛选日志
+    function filterLogsByIp() {
+      if (!rawLogData) return;
+      
+      if (!currentFilterIp) {
+        dom.logContent.textContent = rawLogData;
+        return;
+      }
+      
+      const lines = rawLogData.split('\n');
+      let filteredHtml = '';
+      
+      lines.forEach(line => {
+        if (line.includes(currentFilterIp)) {
+          const highlightedLine = line.replace(
+            new RegExp(currentFilterIp, 'g'),
+            `<span class="highlight-ip">${currentFilterIp}</span>`
+          );
+          filteredHtml += highlightedLine + '\n';
+        }
+      });
+      
+      dom.logContent.innerHTML = filteredHtml || '<div class="loading">未找到该IP的日志记录</div>';
+    }
+
+    // 事件绑定
+    function bindEvents() {
+      // 返回主页面
+      backBtn.addEventListener('click', () => {
+        window.location.href = '/';
+      });
+      
+      // 手动刷新（新增重新加载文件列表）
+      refreshBtn.addEventListener('click', () => {
+        currentFilterIp = '';
+        ipSearchInput.value = '';
+        loadLogFiles(); // 刷新日志文件列表
+      });
+      
+      // IP筛选
+      ipSearchInput.addEventListener('input', (e) => {
+        currentFilterIp = e.target.value.trim();
+        filterLogsByIp();
+      });
+      
+      // 清空筛选
+      clearFilterBtn.addEventListener('click', () => {
+        currentFilterIp = '';
+        ipSearchInput.value = '';
+        if (rawLogData) {
+          dom.logContent.textContent = rawLogData;
+        }
+      });
+    }
+
+    // 初始化
+    window.onload = () => {
+      initPageInfo();
+      bindEvents();
+    };
+  </script>
+</body>
+</html>
